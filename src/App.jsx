@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { hasTourist } from './utils/storage';
 import Onboarding from './pages/Onboarding';
 import DigitalID from './pages/DigitalID';
@@ -28,6 +29,7 @@ function TouristLayout() {
 export default function App() {
     return (
         <BrowserRouter>
+            <SpeedInsights />
             <Routes>
                 <Route path="/police" element={<PoliceDashboard />} />
                 <Route path="/*" element={<TouristLayout />} />
