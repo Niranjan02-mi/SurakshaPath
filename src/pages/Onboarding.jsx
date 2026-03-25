@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createTouristRecord } from '../utils/crypto';
 import { saveTourist } from '../utils/storage';
+import T from '../components/Translate';
 
 export default function Onboarding() {
     const navigate = useNavigate();
@@ -10,7 +11,7 @@ export default function Onboarding() {
         name: '',
         aadhaar: '',
         entryPoint: 'Guwahati Airport',
-        validTill: '2025-04-15',
+        validTill: '2027-04-15',
         emergencyContact: '',
         language: 'en'
     });
@@ -23,7 +24,7 @@ export default function Onboarding() {
         try {
             const record = await createTouristRecord(form);
             saveTourist(record);
-            setTimeout(() => navigate('/id'), 600);
+            setTimeout(() => navigate('/tourist/id'), 600);
         } catch (err) {
             console.error('Failed to create tourist record:', err);
             setLoading(false);
@@ -35,7 +36,7 @@ export default function Onboarding() {
             name: 'Priya Sharma',
             aadhaar: 'XXXX XXXX 4892',
             entryPoint: 'DEL Airport',
-            validTill: '2025-04-15',
+            validTill: '2027-04-15',
             emergencyContact: '+91 98765 43210',
             language: 'en'
         });
@@ -45,19 +46,19 @@ export default function Onboarding() {
         <div className="page">
             <div className="page-header">
                 <div>
-                    <h1>🛡️ SurakshaPath</h1>
+                    <h1>🛡️ <T>SurakshaPath</T></h1>
                     <p className="text-secondary mt-sm" style={{ fontSize: '0.8125rem' }}>
-                        Tourist Safety System
+                        <T>Tourist Safety System</T>
                     </p>
                 </div>
             </div>
 
             <form onSubmit={handleSubmit}>
-                <div className="glass-card" style={{ padding: 'var(--space-lg)', marginBottom: 'var(--space-lg)' }}>
-                    <h3 style={{ marginBottom: 'var(--space-lg)' }}>Tourist ID Setup</h3>
+                <div className="retro-card" style={{ padding: 'var(--space-lg)', marginBottom: 'var(--space-lg)' }}>
+                    <h3 style={{ marginBottom: 'var(--space-lg)' }}><T>Tourist ID Setup</T></h3>
 
                     <div className="input-group mb-md">
-                        <label>Aadhaar / Passport</label>
+                        <label><T>Aadhaar / Passport</T></label>
                         <input
                             className="input-field"
                             type="text"
@@ -69,7 +70,7 @@ export default function Onboarding() {
                     </div>
 
                     <div className="input-group mb-md">
-                        <label>Full Name</label>
+                        <label><T>Full Name</T></label>
                         <input
                             className="input-field"
                             type="text"
@@ -81,7 +82,7 @@ export default function Onboarding() {
                     </div>
 
                     <div className="input-group mb-md">
-                        <label>Entry Point</label>
+                        <label><T>Entry Point</T></label>
                         <input
                             className="input-field"
                             type="text"
@@ -93,7 +94,7 @@ export default function Onboarding() {
                     </div>
 
                     <div className="input-group mb-md">
-                        <label>Valid Till</label>
+                        <label><T>Valid Till</T></label>
                         <input
                             className="input-field"
                             type="date"
@@ -104,7 +105,7 @@ export default function Onboarding() {
                     </div>
 
                     <div className="input-group mb-md">
-                        <label>Emergency Contact</label>
+                        <label><T>Emergency Contact</T></label>
                         <input
                             className="input-field"
                             type="text"
@@ -116,7 +117,7 @@ export default function Onboarding() {
                     </div>
 
                     <div className="input-group mb-lg">
-                        <label>Language</label>
+                        <label><T>Language</T></label>
                         <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
                             {['en', 'hi', 'bn'].map(lang => (
                                 <button
@@ -139,9 +140,9 @@ export default function Onboarding() {
                     style={{ marginBottom: 'var(--space-md)' }}
                 >
                     {loading ? (
-                        <span>⏳ Generating Digital ID...</span>
+                        <span>⏳ <T>Generating Digital ID...</T></span>
                     ) : (
-                        <span>🪪 Generate Digital ID</span>
+                        <span>🪪 <T>Generate Digital ID</T></span>
                     )}
                 </button>
 
@@ -150,7 +151,7 @@ export default function Onboarding() {
                     className="btn btn-ghost btn-block"
                     onClick={fillDemo}
                 >
-                    Fill Demo Data
+                    <T>Fill Demo Data</T>
                 </button>
             </form>
         </div>

@@ -100,47 +100,45 @@ export default function SafetyMap() {
             </div>
 
             {/* Map */}
-            <div className="map-container" style={{ marginBottom: 'var(--space-lg)' }}>
-                <MapContainer center={userPos} zoom={DEFAULT_ZOOM} style={{ height: '100%', width: '100%' }}>
+            <div className="map-container" style={{ marginBottom: 'var(--space-lg)', border: 'var(--border-thick)', height: '400px', backgroundColor: 'var(--bg-secondary)', position: 'relative', zIndex: 1 }}>
+                <MapContainer center={userPos} zoom={DEFAULT_ZOOM} style={{ height: '100%', width: '100%', zIndex: 1 }}>
                     <TileLayer
                         attribution='&copy; <a href="https://www.openstreetmap.org/">OSM</a>'
-                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                        url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
                     />
                     <ZoneOverlays />
                     <Marker position={userPos}>
                         <Popup>
-                            <span style={{ color: '#333' }}>📍 You are here</span>
+                            <span style={{ color: '#333', fontWeight: 'bold' }}>📍 You are here</span>
                         </Popup>
                     </Marker>
                 </MapContainer>
             </div>
 
             {/* Safety Score */}
-            <div className="glass-card" style={{ padding: 'var(--space-lg)', marginBottom: 'var(--space-lg)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-lg)' }}>
-                    <SafetyScoreRing score={safetyScore} />
-                    <div>
-                        <h3>Safety Score</h3>
-                        <p className="text-secondary mt-sm" style={{ fontSize: '0.8125rem', lineHeight: 1.5 }}>
-                            Based on your location, zone risk level, and time of day
-                        </p>
-                    </div>
+            <div className="retro-card" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xl)' }}>
+                <SafetyScoreRing score={safetyScore} />
+                <div>
+                    <h3>Safety Score</h3>
+                    <p className="text-secondary" style={{ marginTop: 'var(--space-xs)', fontSize: '0.85rem', fontWeight: 600 }}>
+                        Based on your location, zone risk level, and time of day
+                    </p>
                 </div>
             </div>
 
             {/* Nearby Alerts */}
-            <h3 style={{ marginBottom: 'var(--space-md)' }}>Nearby Alerts</h3>
+            <h3 style={{ marginBottom: 'var(--space-md)', fontFamily: 'var(--font-main)', fontWeight: 800, textTransform: 'uppercase', color: 'var(--forest-green)' }}>Nearby Alerts</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
                 {NEARBY_ALERTS.map(alert => (
-                    <div key={alert.id} className="glass-card" style={{ padding: 'var(--space-md)' }}>
-                        <div className="flex-between mb-md">
+                    <div key={alert.id} className="retro-card" style={{ padding: 'var(--space-md)', marginBottom: '0' }}>
+                        <div className="flex-between" style={{ marginBottom: 'var(--space-sm)' }}>
                             <div>
-                                <h4>{alert.title}</h4>
-                                <span className="text-muted" style={{ fontSize: '0.8125rem' }}>{alert.distance}</span>
+                                <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800 }}>{alert.title}</h4>
+                                <span className="text-muted" style={{ fontSize: '0.8rem', fontWeight: 700 }}>{alert.distance}</span>
                             </div>
                             {severityBadge(alert.severity)}
                         </div>
-                        <p className="text-secondary" style={{ fontSize: '0.8125rem' }}>{alert.description}</p>
+                        <p className="text-secondary" style={{ margin: 0, fontSize: '0.85rem', fontWeight: 600 }}>{alert.description}</p>
                     </div>
                 ))}
             </div>

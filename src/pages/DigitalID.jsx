@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { getTourist, clearTourist } from '../utils/storage';
+import { signOut } from '../utils/auth';
+import T from '../components/Translate';
 
 export default function DigitalID() {
     const navigate = useNavigate();
@@ -11,7 +13,7 @@ export default function DigitalID() {
     useEffect(() => {
         const data = getTourist();
         if (!data) {
-            navigate('/onboarding');
+            navigate('/tourist/onboarding');
             return;
         }
         setTourist(data);
@@ -21,7 +23,7 @@ export default function DigitalID() {
 
     const handleReset = () => {
         clearTourist();
-        navigate('/onboarding');
+        navigate('/tourist/onboarding');
     };
 
     const handleShare = async () => {
@@ -48,14 +50,15 @@ export default function DigitalID() {
     return (
         <div className="page">
             <div className="page-header">
-                <h1>Your Digital ID</h1>
-                <span className="badge badge-success">ID Ready</span>
+                <h1><T>Your Digital ID</T></h1>
+                <span className="badge badge-success"><T>ID Ready</T></span>
+                <button className="btn btn-ghost btn-sm" onClick={() => { signOut(); navigate('/'); }} style={{ marginLeft: 8 }}>🚪</button>
             </div>
 
             {/* QR Code */}
-            <div className="glass-card" style={{ padding: 'var(--space-md)', marginBottom: 'var(--space-lg)', textAlign: 'center' }}>
+            <div className="retro-card" style={{ padding: 'var(--space-md)', marginBottom: 'var(--space-lg)', textAlign: 'center' }}>
                 <p className="text-secondary" style={{ fontSize: '0.8125rem', marginBottom: 'var(--space-md)' }}>
-                    Scan to verify offline
+                    <T>Scan to verify offline</T>
                 </p>
                 <div className="qr-container">
                     <QRCodeSVG
@@ -68,46 +71,46 @@ export default function DigitalID() {
                     />
                 </div>
                 <p className="text-muted mt-md" style={{ fontSize: '0.75rem' }}>
-                    Works offline — no internet needed for verification
+                    <T>Works offline — no internet needed for verification</T>
                 </p>
             </div>
 
             {/* ID Card */}
-            <div className="glass-card id-card" style={{ marginBottom: 'var(--space-lg)' }}>
+            <div className="retro-card id-card" style={{ marginBottom: 'var(--space-lg)' }}>
                 <div className="id-field">
-                    <span className="id-label">Name</span>
+                    <span className="id-label"><T>Name</T></span>
                     <span className="id-value">{tourist.name}</span>
                 </div>
                 <div className="id-field">
-                    <span className="id-label">Tourist ID</span>
+                    <span className="id-label"><T>Tourist ID</T></span>
                     <span className="id-value tourist-id">{tourist.id}</span>
                 </div>
                 <div className="id-field">
-                    <span className="id-label">Valid till</span>
-                    <span className="id-value">{new Date(tourist.validTill).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                    <span className="id-label"><T>Valid till</T></span>
+                    <span className="id-value">{new Date(tourist.validTill).toLocaleDateString(tourist.language === 'en' ? 'en-IN' : tourist.language, { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                 </div>
                 <div className="id-field">
-                    <span className="id-label">Entry Point</span>
+                    <span className="id-label"><T>Entry Point</T></span>
                     <span className="id-value">{tourist.entryPoint}</span>
                 </div>
                 <div className="id-field">
-                    <span className="id-label">Blockchain hash</span>
+                    <span className="id-label"><T>Blockchain hash</T></span>
                     <span className="id-value hash">{tourist.hash.slice(0, 6)}...{tourist.hash.slice(-4)}</span>
                 </div>
                 <div className="id-field">
-                    <span className="id-label">IPFS CID</span>
+                    <span className="id-label"><T>IPFS CID</T></span>
                     <span className="id-value hash" style={{ fontSize: '0.75rem' }}>{tourist.cid.slice(0, 16)}...</span>
                 </div>
             </div>
 
             <button className="btn btn-primary btn-block mb-md" onClick={handleShare}>
-                📤 Share with police / hotel
+                📤 <T>Share with police / hotel</T>
             </button>
 
             {showShare && (
-                <div className="glass-card" style={{ padding: 'var(--space-lg)', marginBottom: 'var(--space-md)' }}>
+                <div className="retro-card" style={{ padding: 'var(--space-lg)', marginBottom: 'var(--space-md)' }}>
                     <p className="text-secondary mb-md" style={{ fontSize: '0.875rem' }}>
-                        Share this QR data with the verifier:
+                        <T>Share this QR data with the verifier:</T>
                     </p>
                     <div style={{
                         background: 'var(--bg-secondary)',
@@ -124,13 +127,13 @@ export default function DigitalID() {
                         {tourist.qrPayload}
                     </div>
                     <button className="btn btn-outline btn-block btn-sm" onClick={copyQR}>
-                        📋 Copy QR Data
+                        📋 <T>Copy QR Data</T>
                     </button>
                 </div>
             )}
 
             <button className="btn btn-ghost btn-block" onClick={handleReset} style={{ fontSize: '0.8125rem' }}>
-                Reset ID (Dev)
+                <T>Reset ID (Dev)</T>
             </button>
         </div>
     );
