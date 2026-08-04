@@ -1,40 +1,50 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
-import L from 'leaflet';
+import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF, CircleF, Autocomplete } from '@react-google-maps/api';
 import { verifyQRPayload, generateHash, generateMockCID } from '../utils/crypto';
 import { getPendingAlerts, getQueuedAlerts, flushQueue } from '../utils/offlineQueue';
 import { getTourist } from '../utils/storage';
 import { signOut, getAuth } from '../utils/auth';
 import jsQR from 'jsqr';
 
-// Fix default marker icons for react-leaflet
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-    iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-    iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-    shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-});
+const GOOGLE_MAPS_API_KEY = 'AIzaSyDDP_wskGXC4GpvBZU1jU0aLE4DVRiN54k';
+const LIBRARIES = ['places', 'geometry'];
 
-// Custom marker icons
-function createCustomIcon(color, emoji) {
-    return L.divIcon({
-        className: 'custom-map-marker',
-        html: `<div style="
-            width:36px;height:36px;border-radius:50%;
-            background:${color};border:3px solid white;
-            display:flex;align-items:center;justify-content:center;
-            font-size:16px;box-shadow:0 2px 12px ${color}88;
-        ">${emoji}</div>`,
-        iconSize: [36, 36],
-        iconAnchor: [18, 18],
-    });
+// SVG marker icon URLs — created as data URIs so no network needed
+function makeSvgMarkerUrl(color, label) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+        <circle cx="20" cy="20" r="18" fill="${color}" stroke="white" stroke-width="3"/>
+        <text x="20" y="26" text-anchor="middle" font-size="16" fill="white">${label}</text>
+    </svg>`;
+    return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
 }
 
-const ICON_ACTIVE = createCustomIcon('#2dd48c', '🧳');
-const ICON_ALERT = createCustomIcon('#ffa502', '⚠️');
-const ICON_SOS = createCustomIcon('#ff4757', '🚨');
-const ICON_POLICE = createCustomIcon('#3498db', '🛡️');
+const MARKER_URLS = {
+    active: makeSvgMarkerUrl('#2dd48c', '✓'),
+    alert: makeSvgMarkerUrl('#ffa502', '!'),
+    sos: makeSvgMarkerUrl('#ff4757', '‼'),
+    police: makeSvgMarkerUrl('#3498db', '★'),
+};
+
+// Dark map style for police dashboard
+const DARK_MAP_STYLES = [
+    { elementType: 'geometry', stylers: [{ color: '#212121' }] },
+    { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+    { elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
+    { elementType: 'labels.text.stroke', stylers: [{ color: '#212121' }] },
+    { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#757575' }] },
+    { featureType: 'administrative.country', elementType: 'labels.text.fill', stylers: [{ color: '#9e9e9e' }] },
+    { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#bdbdbd' }] },
+    { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
+    { featureType: 'road', elementType: 'geometry.fill', stylers: [{ color: '#2c2c2c' }] },
+    { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#8a8a8a' }] },
+    { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#373737' }] },
+    { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#3c3c3c' }] },
+    { featureType: 'road.highway.controlled_access', elementType: 'geometry', stylers: [{ color: '#4e4e4e' }] },
+    { featureType: 'transit', elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
+    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#000000' }] },
+    { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#3d3d3d' }] },
+];
 
 // Mock tourist data with GPS coordinates (Pan-India distribution)
 const MOCK_TOURISTS = [
@@ -52,19 +62,13 @@ const MOCK_TOURISTS = [
 const POLICE_STATION = { lat: 28.6139, lng: 77.2090, name: 'National Command Center (Delhi)' };
 
 // Map center (Pan-India overview)
-const MAP_CENTER = [22.9, 79.2];
-const MAP_ZOOM = 4.5;
+const MAP_CENTER = { lat: 22.9, lng: 79.2 };
+const MAP_ZOOM = 5;
 
-// Component to animate map to a tourist
-function FlyToMarker({ position }) {
-    const map = useMap();
-    useEffect(() => {
-        if (position) {
-            map.flyTo(position, 12, { duration: 1.5 });
-        }
-    }, [position, map]);
-    return null;
-}
+const mapContainerStyle = {
+    width: '100%',
+    height: '100%',
+};
 
 // Simulated real-time location updates
 function useSimulatedLocations(tourists) {
@@ -82,6 +86,38 @@ function useSimulatedLocations(tourists) {
     return locations;
 }
 
+// Build google.maps.Icon objects after API loads
+function useMarkerIcons(isLoaded) {
+    const [icons, setIcons] = useState(null);
+    useEffect(() => {
+        if (isLoaded && window.google) {
+            setIcons({
+                active: {
+                    url: MARKER_URLS.active,
+                    scaledSize: new window.google.maps.Size(36, 36),
+                    anchor: new window.google.maps.Point(18, 18),
+                },
+                alert: {
+                    url: MARKER_URLS.alert,
+                    scaledSize: new window.google.maps.Size(36, 36),
+                    anchor: new window.google.maps.Point(18, 18),
+                },
+                sos: {
+                    url: MARKER_URLS.sos,
+                    scaledSize: new window.google.maps.Size(36, 36),
+                    anchor: new window.google.maps.Point(18, 18),
+                },
+                police: {
+                    url: MARKER_URLS.police,
+                    scaledSize: new window.google.maps.Size(36, 36),
+                    anchor: new window.google.maps.Point(18, 18),
+                },
+            });
+        }
+    }, [isLoaded]);
+    return icons;
+}
+
 export default function PoliceDashboard() {
     const navigate = useNavigate();
     const auth = getAuth();
@@ -94,14 +130,92 @@ export default function PoliceDashboard() {
     const [activePanel, setActivePanel] = useState('map');
     const [focusTourist, setFocusTourist] = useState(null);
     const [mapFilter, setMapFilter] = useState('all');
-    const [scanStatus, setScanStatus] = useState('idle'); // 'idle', 'scanning', 'detected', 'error'
+    const [scanStatus, setScanStatus] = useState('idle');
     const [cameraError, setCameraError] = useState('');
+    const [activeInfoWindow, setActiveInfoWindow] = useState(null);
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
     const scanAnimRef = useRef(null);
     const streamRef = useRef(null);
+    const mapRef = useRef(null);
+    const [autocomplete, setAutocomplete] = useState(null);
+    const [touristPlaces, setTouristPlaces] = useState([]);
+    const [selectedPlace, setSelectedPlace] = useState(null);
 
+    const { isLoaded, loadError } = useJsApiLoader({
+        googleMapsApiKey: GOOGLE_MAPS_API_KEY,
+        libraries: LIBRARIES,
+    });
+
+    const markerIcons = useMarkerIcons(isLoaded);
     const tourists = useSimulatedLocations(MOCK_TOURISTS);
+
+    const fetchBhandardaraPlaces = useCallback((map) => {
+        if (!window.google) return;
+        const service = new window.google.maps.places.PlacesService(map);
+        const request = {
+            query: 'tourist attractions in Bhandardara, Maharashtra',
+        };
+
+        const hardcodedTreks = [
+            { name: '🏔️ Kalsubai Peak (Trek)', geometry: { location: { lat: 19.6015, lng: 73.7095 } }, rating: 4.7, formatted_address: 'Kalsubai Harishchandragad Wildlife Sanctuary' },
+            { name: '🏔️ Harishchandragad (Trek)', geometry: { location: { lat: 19.3878, lng: 73.7745 } }, rating: 4.8, formatted_address: 'Ahmednagar District, Maharashtra' },
+            { name: '🧗 Sandhan Valley (Trek)', geometry: { location: { lat: 19.5297, lng: 73.7051 } }, rating: 4.7, formatted_address: 'Samrad Village, Maharashtra' },
+            { name: '🏰 Ratangad Fort (Trek)', geometry: { location: { lat: 19.5074, lng: 73.7051 } }, rating: 4.8, formatted_address: 'Ratanwadi, Maharashtra' }
+        ];
+
+        service.textSearch(request, (results, status) => {
+            console.log('Places API Search Status (Police):', status);
+            if (status === window.google.maps.places.PlacesServiceStatus.OK && results) {
+                setTouristPlaces([...results, ...hardcodedTreks]);
+                if (results.length > 0) {
+                    map.panTo(results[0].geometry.location);
+                    map.setZoom(11);
+                }
+            } else {
+                console.error('Places API failed with status:', status);
+                const fallbackPlaces = [
+                    { name: '🌊 Arthur Lake', geometry: { location: { lat: 19.5393, lng: 73.7749 } }, rating: 4.5, formatted_address: 'Bhandardara, Maharashtra' },
+                    { name: '🌊 Randha Falls', geometry: { location: { lat: 19.5539, lng: 73.7741 } }, rating: 4.6, formatted_address: 'Bhandardara, Maharashtra' },
+                    { name: '🌊 Umbrella Fall', geometry: { location: { lat: 19.5444, lng: 73.7661 } }, rating: 4.4, formatted_address: 'Bhandardara, Maharashtra' },
+                    { name: '🛕 Amruteshwar Temple', geometry: { location: { lat: 19.5097, lng: 73.7088 } }, rating: 4.8, formatted_address: 'Ratanwadi, Maharashtra' },
+                    ...hardcodedTreks
+                ];
+                setTouristPlaces(fallbackPlaces);
+                map.panTo({ lat: 19.5393, lng: 73.7749 });
+                map.setZoom(11); // Slightly zoomed out to see all treks
+            }
+        });
+    }, []);
+
+    const onMapLoad = useCallback((map) => {
+        mapRef.current = map;
+        fetchBhandardaraPlaces(map);
+    }, [fetchBhandardaraPlaces]);
+
+    const onSearchLoad = useCallback((ac) => {
+        setAutocomplete(ac);
+    }, []);
+
+    const onPlaceChanged = useCallback(() => {
+        if (autocomplete !== null) {
+            const place = autocomplete.getPlace();
+            if (place.geometry && place.geometry.location) {
+                const lat = place.geometry.location.lat();
+                const lng = place.geometry.location.lng();
+                mapRef.current?.panTo({ lat, lng });
+                mapRef.current?.setZoom(14);
+            }
+        }
+    }, [autocomplete]);
+
+    // Fly to tourist when focusTourist changes
+    useEffect(() => {
+        if (focusTourist && mapRef.current) {
+            mapRef.current.panTo({ lat: focusTourist.lat, lng: focusTourist.lng });
+            mapRef.current.setZoom(12);
+        }
+    }, [focusTourist]);
 
     useEffect(() => {
         const onOnline = () => setIsOnline(true);
@@ -145,7 +259,6 @@ export default function PoliceDashboard() {
             });
             streamRef.current = stream;
 
-            // Wait for the video element to be in the DOM
             await new Promise(r => setTimeout(r, 100));
 
             if (videoRef.current) {
@@ -169,12 +282,10 @@ export default function PoliceDashboard() {
     };
 
     const stopCamera = () => {
-        // Stop animation loop
         if (scanAnimRef.current) {
             cancelAnimationFrame(scanAnimRef.current);
             scanAnimRef.current = null;
         }
-        // Stop camera stream
         if (streamRef.current) {
             streamRef.current.getTracks().forEach(t => t.stop());
             streamRef.current = null;
@@ -206,13 +317,11 @@ export default function PoliceDashboard() {
         });
 
         if (code && code.data) {
-            // QR code detected!
             setScanStatus('detected');
             stopCamera();
             setScanMode('input');
             setQrInput(code.data);
 
-            // Play a quick beep sound
             try {
                 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 const osc = audioCtx.createOscillator();
@@ -225,17 +334,14 @@ export default function PoliceDashboard() {
                 osc.stop(audioCtx.currentTime + 0.15);
             } catch (e) { /* audio not available */ }
 
-            // Auto-verify the scanned data
             handleVerify(code.data);
             return;
         }
 
-        // Keep scanning
         scanAnimRef.current = requestAnimationFrame(scanLoop);
     };
 
     const loadDemoQR = async () => {
-        // Generate a cryptographically valid demo payload
         const demoRecord = {
             name: 'Priya Sharma',
             aadhaar: 'XXXX XXXX 4892',
@@ -261,7 +367,6 @@ export default function PoliceDashboard() {
     };
 
     const loadTouristQR = () => {
-        // Load real tourist QR data from localStorage (if a tourist is registered on this device)
         const tourist = getTourist();
         if (tourist && tourist.qrPayload) {
             setQrInput(tourist.qrPayload);
@@ -272,20 +377,21 @@ export default function PoliceDashboard() {
     };
 
     const statusBadge = (status) => {
-        const map = {
+        const m = {
             active: { cls: 'badge-success', label: 'Active' },
             alert: { cls: 'badge-warning', label: 'Alert' },
             sos: { cls: 'badge-danger', label: 'SOS' }
         };
-        const s = map[status] || map.active;
+        const s = m[status] || m.active;
         return <span className={`badge ${s.cls}`}>{s.label}</span>;
     };
 
     const getMarkerIcon = (status) => {
+        if (!markerIcons) return undefined;
         switch (status) {
-            case 'sos': return ICON_SOS;
-            case 'alert': return ICON_ALERT;
-            default: return ICON_ACTIVE;
+            case 'sos': return markerIcons.sos;
+            case 'alert': return markerIcons.alert;
+            default: return markerIcons.active;
         }
     };
 
@@ -391,58 +497,160 @@ export default function PoliceDashboard() {
                 {/* ===================== MAP PANEL ===================== */}
                 {activePanel === 'map' && (
                     <div className="pd-map-panel">
-                        <div className="pd-map-container">
-                            <MapContainer
-                                center={MAP_CENTER}
-                                zoom={MAP_ZOOM}
-                                className="pd-leaflet-map"
-                                zoomControl={false}
-                            >
-                                <TileLayer
-                                    attribution='&copy; <a href="https://carto.com/">CARTO</a>'
-                                    url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                                />
-                                {focusTourist && <FlyToMarker position={[focusTourist.lat, focusTourist.lng]} />}
+                        <div className="pd-map-container" style={{ position: 'relative' }}>
+                            {isLoaded && (
+                                <div style={{ position: 'absolute', top: '10px', left: '50%', transform: 'translateX(-50%)', zIndex: 9999, width: '90%', maxWidth: '400px' }}>
+                                    <Autocomplete onLoad={onSearchLoad} onPlaceChanged={onPlaceChanged}>
+                                        <input
+                                            type="text"
+                                            placeholder="Search for a location..."
+                                            style={{
+                                                boxSizing: 'border-box',
+                                                width: '100%',
+                                                height: '44px',
+                                                padding: '0 16px',
+                                                borderRadius: '8px',
+                                                border: 'none',
+                                                backgroundColor: '#ffffff',
+                                                color: '#000000',
+                                                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
+                                                fontSize: '15px',
+                                                fontWeight: '500',
+                                                outline: 'none',
+                                                textOverflow: 'ellipsis',
+                                            }}
+                                        />
+                                    </Autocomplete>
+                                </div>
+                            )}
+                            {isLoaded ? (
+                                <GoogleMap
+                                    mapContainerStyle={mapContainerStyle}
+                                    center={MAP_CENTER}
+                                    zoom={MAP_ZOOM}
+                                    onLoad={onMapLoad}
+                                    options={{
+                                        styles: DARK_MAP_STYLES,
+                                        disableDefaultUI: true,
+                                        zoomControl: true,
+                                        mapTypeControl: true,
+                                        streetViewControl: false,
+                                        fullscreenControl: false,
+                                    }}
+                                >
+                                    {/* Police station */}
+                                    <MarkerF
+                                        position={{ lat: POLICE_STATION.lat, lng: POLICE_STATION.lng }}
+                                        icon={markerIcons?.police}
+                                        onClick={() => setActiveInfoWindow('police')}
+                                    />
+                                    {activeInfoWindow === 'police' && (
+                                        <InfoWindowF
+                                            position={{ lat: POLICE_STATION.lat, lng: POLICE_STATION.lng }}
+                                            onCloseClick={() => setActiveInfoWindow(null)}
+                                        >
+                                            <div style={{ textAlign: 'center', padding: '4px' }}>
+                                                <strong>🛡️ {POLICE_STATION.name}</strong><br />
+                                                <small>Police Command Center</small>
+                                            </div>
+                                        </InfoWindowF>
+                                    )}
 
-                                {/* Police station */}
-                                <Marker position={[POLICE_STATION.lat, POLICE_STATION.lng]} icon={ICON_POLICE}>
-                                    <Popup>
-                                        <div style={{ textAlign: 'center' }}>
-                                            <strong>🛡️ {POLICE_STATION.name}</strong><br />
-                                            <small>Police Command Center</small>
-                                        </div>
-                                    </Popup>
-                                </Marker>
+                                    {/* Tourist markers */}
+                                    {filteredTourists.map(t => (
+                                        <React.Fragment key={t.id}>
+                                            <MarkerF
+                                                position={{ lat: t.lat, lng: t.lng }}
+                                                icon={getMarkerIcon(t.status)}
+                                                onClick={() => setActiveInfoWindow(t.id)}
+                                            />
+                                            {activeInfoWindow === t.id && (
+                                                <InfoWindowF
+                                                    position={{ lat: t.lat, lng: t.lng }}
+                                                    onCloseClick={() => setActiveInfoWindow(null)}
+                                                >
+                                                    <div className="map-popup" style={{ padding: '4px' }}>
+                                                        <strong>{t.name}</strong>
+                                                        <span className={`map-popup-status ${t.status}`}>{t.status.toUpperCase()}</span>
+                                                        <small>📍 {t.zone}</small>
+                                                        <small>🕐 {t.lastSeen}</small>
+                                                        <small>🎯 {t.activity}</small>
+                                                        <small className="mono">{t.id}</small>
+                                                    </div>
+                                                </InfoWindowF>
+                                            )}
+                                            {/* Danger/alert radius */}
+                                            {t.status === 'sos' && (
+                                                <CircleF
+                                                    center={{ lat: t.lat, lng: t.lng }}
+                                                    radius={5000}
+                                                    options={{
+                                                        strokeColor: '#ff4757',
+                                                        fillColor: '#ff4757',
+                                                        fillOpacity: 0.1,
+                                                        strokeWeight: 2,
+                                                        strokeOpacity: 0.8,
+                                                    }}
+                                                />
+                                            )}
+                                            {t.status === 'alert' && (
+                                                <CircleF
+                                                    center={{ lat: t.lat, lng: t.lng }}
+                                                    radius={3000}
+                                                    options={{
+                                                        strokeColor: '#ffa502',
+                                                        fillColor: '#ffa502',
+                                                        fillOpacity: 0.08,
+                                                        strokeWeight: 1,
+                                                        strokeOpacity: 0.6,
+                                                    }}
+                                                />
+                                            )}
+                                        </React.Fragment>
+                                    ))}
 
-                                {/* Tourist markers */}
-                                {filteredTourists.map(t => (
-                                    <React.Fragment key={t.id}>
-                                        <Marker position={[t.lat, t.lng]} icon={getMarkerIcon(t.status)}>
-                                            <Popup>
-                                                <div className="map-popup">
-                                                    <strong>{t.name}</strong>
-                                                    <span className={`map-popup-status ${t.status}`}>{t.status.toUpperCase()}</span>
-                                                    <small>📍 {t.zone}</small>
-                                                    <small>🕐 {t.lastSeen}</small>
-                                                    <small>🎯 {t.activity}</small>
-                                                    <small className="mono">{t.id}</small>
-                                                </div>
-                                            </Popup>
-                                        </Marker>
-                                        {/* Danger/alert radius */}
-                                        {t.status === 'sos' && (
-                                            <Circle center={[t.lat, t.lng]} radius={5000}
-                                                pathOptions={{ color: '#ff4757', fillColor: '#ff4757', fillOpacity: 0.1, weight: 2, dashArray: '8 4' }}
-                                            />
-                                        )}
-                                        {t.status === 'alert' && (
-                                            <Circle center={[t.lat, t.lng]} radius={3000}
-                                                pathOptions={{ color: '#ffa502', fillColor: '#ffa502', fillOpacity: 0.08, weight: 1, dashArray: '6 4' }}
-                                            />
-                                        )}
-                                    </React.Fragment>
-                                ))}
-                            </MapContainer>
+                                    {/* Bhandardara Tourist Places */}
+                                    {touristPlaces.map((place, index) => (
+                                        <MarkerF
+                                            key={`tp-${index}`}
+                                            position={place.geometry.location}
+                                            onClick={() => setSelectedPlace(place)}
+                                            icon={{
+                                                url: 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png',
+                                            }}
+                                        />
+                                    ))}
+
+                                    {/* Tourist Place InfoWindow */}
+                                    {selectedPlace && (
+                                        <InfoWindowF
+                                            position={selectedPlace.geometry.location}
+                                            onCloseClick={() => setSelectedPlace(null)}
+                                        >
+                                            <div style={{ padding: '8px', maxWidth: '200px', color: '#000' }}>
+                                                <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#333' }}>{selectedPlace.name}</h4>
+                                                {selectedPlace.formatted_address && (
+                                                    <p style={{ margin: '0 0 8px 0', fontSize: '12px', color: '#666' }}>{selectedPlace.formatted_address}</p>
+                                                )}
+                                                {selectedPlace.rating && (
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}>
+                                                        <span>⭐ {selectedPlace.rating}</span>
+                                                        <span style={{ color: '#888' }}>({selectedPlace.user_ratings_total} reviews)</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </InfoWindowF>
+                                    )}
+                                </GoogleMap>
+                            ) : loadError ? (
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--danger)' }}>
+                                    ⚠️ Failed to load Google Maps
+                                </div>
+                            ) : (
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)' }}>
+                                    ⏳ Loading Google Maps...
+                                </div>
+                            )}
 
                             {/* Live indicator */}
                             <div className="pd-live-badge">
@@ -499,7 +707,6 @@ export default function PoliceDashboard() {
 
                             {scanMode === 'camera' ? (
                                 <div style={{ marginBottom: 'var(--space-lg)' }}>
-                                    {/* Camera error message */}
                                     {cameraError && (
                                         <div className="auth-error" style={{ marginBottom: 'var(--space-md)' }}>
                                             <span>⚠️</span>
@@ -513,7 +720,6 @@ export default function PoliceDashboard() {
                                             playsInline
                                             muted
                                         />
-                                        {/* Scan frame overlay */}
                                         <div className="scanner-overlay">
                                             <div className="scanner-frame" />
                                             {scanStatus === 'scanning' && (
@@ -523,7 +729,6 @@ export default function PoliceDashboard() {
                                         <canvas ref={canvasRef} style={{ display: 'none' }} />
                                     </div>
 
-                                    {/* Scanning status */}
                                     <div style={{
                                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                                         marginTop: 'var(--space-md)', padding: 'var(--space-sm) var(--space-md)',
@@ -561,7 +766,6 @@ export default function PoliceDashboard() {
                                 </div>
                             ) : (
                                 <div style={{ marginBottom: 'var(--space-lg)' }}>
-                                    {/* Quick-load buttons */}
                                     <div style={{ display: 'flex', gap: 'var(--space-sm)', marginBottom: 'var(--space-md)' }}>
                                         <button className="btn btn-outline btn-sm" onClick={loadDemoQR} style={{ flex: 1 }}>
                                             📋 Load Demo Tourist
@@ -730,7 +934,6 @@ export default function PoliceDashboard() {
                                 )}
                             </div>
 
-                            {/* Always show SOS tourists as top-level alerts */}
                             {tourists.filter(t => t.status === 'sos' || t.status === 'alert').map(t => (
                                 <div key={t.id} className="alert-card glass-card" style={{
                                     borderLeftColor: t.status === 'sos' ? 'var(--danger)' : 'var(--warning)',

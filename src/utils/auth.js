@@ -22,36 +22,112 @@ function saveUsers(users) {
 }
 
 // Sign up a new user
-export function signUp({ name, email, password, role, badgeId, department }) {
-    const users = getUsers();
-    if (users.find(u => u.email === email)) {
-        return { success: false, error: 'Email already registered' };
+export async function signUp({ name, email, password, role, badgeId, department }) {
+    try {
+        const response = await fetch('http://localhost:5000/api/register', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ name, email, password, role }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            return { success: false, error: data.message || 'Registration failed' };
+        }
+
+        // If backend auto-verifies (e.g., Demo accounts), it will return a token directly.
+        if (data.token && data.user) {
+            const user = { ...data.user, role, badgeId: badgeId || null, department: department || null };
+            setAuth(user);
+            localStorage.setItem('surakshapath_token', data.token);
+            return { success: true, user, autoVerified: true };
+        }
+
+        // Standard user flow: NOT verified yet!
+        return { success: true, email };
+    } catch (error) {
+        return { success: false, error: 'Cannot connect to server.' };
     }
-    const user = {
-        id: `SP-${Date.now().toString(36).toUpperCase()}`,
-        name,
-        email,
-        password, // In production, this would be hashed
-        role,
-        badgeId: badgeId || null,
-        department: department || null,
-        createdAt: new Date().toISOString(),
-    };
-    users.push(user);
-    saveUsers(users);
-    setAuth(user);
-    return { success: true, user };
+}
+
+// Verify OTP
+export async function verifyOTP(email, otp) {
+    try {
+        const response = await fetch('http://localhost:5000/api/verify', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email, otp }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            return { success: false, error: data.message || 'Verification failed' };
+        }
+
+        const user = { ...data.user, badgeId: null, department: null }; 
+        setAuth(user);
+        localStorage.setItem('surakshapath_token', data.token);
+
+        return { success: true, user };
+    } catch (error) {
+        return { success: false, error: 'Cannot connect to server.' };
+    }
+}
+
+// Resend OTP
+export async function resendOTP(email) {
+    try {
+        const response = await fetch('http://localhost:5000/api/resend-otp', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            return { success: false, error: data.message || 'Failed to resend code.' };
+        }
+
+        return { success: true, message: data.message };
+    } catch (error) {
+        return { success: false, error: 'Cannot connect to server.' };
+    }
 }
 
 // Sign in
-export function signIn({ email, password }) {
-    const users = getUsers();
-    const user = users.find(u => u.email === email && u.password === password);
-    if (!user) {
-        return { success: false, error: 'Invalid email or password' };
+export async function signIn({ email, password }) {
+    try {
+        const response = await fetch('http://localhost:5000/api/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email, password }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            return { success: false, error: data.message || 'Login failed' };
+        }
+
+        const user = { ...data.user, badgeId: null, department: null }; 
+        setAuth(user);
+        localStorage.setItem('surakshapath_token', data.token);
+
+        return { success: true, user };
+    } catch (error) {
+        return { success: false, error: 'Cannot connect to server. Is Docker running?' };
     }
-    setAuth(user);
-    return { success: true, user };
 }
 
 // Auth session helpers

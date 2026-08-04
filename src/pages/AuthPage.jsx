@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signUp, signIn, ROLES } from '../utils/auth';
+import { signUp, signIn, verifyOTP, resendOTP, ROLES } from '../utils/auth';
 
 const ROLE_CONFIG = {
     [ROLES.TOURIST]: {
@@ -43,6 +43,11 @@ export default function AuthPage() {
     });
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    
+    // OTP State
+    const [showOTP, setShowOTP] = useState(false);
+    const [otp, setOtp] = useState('');
+    const [registeredEmail, setRegisteredEmail] = useState('');
 
     const update = (field, value) => {
         setForm(prev => ({ ...prev, [field]: value }));
@@ -67,14 +72,20 @@ export default function AuthPage() {
                 setLoading(false);
                 return;
             }
-            const result = signUp({ ...form, role: selectedRole });
+            const result = await signUp({ ...form, role: selectedRole });
             if (!result.success) {
                 setError(result.error);
                 setLoading(false);
                 return;
             }
+            
+            // Show OTP Screen
+            setRegisteredEmail(form.email);
+            setShowOTP(true);
+            setLoading(false);
+            return;
         } else {
-            const result = signIn({ email: form.email, password: form.password });
+            const result = await signIn({ email: form.email, password: form.password });
             if (!result.success) {
                 setError(result.error);
                 setLoading(false);
@@ -95,6 +106,34 @@ export default function AuthPage() {
         }
     };
 
+    const handleVerifyOTP = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        setError('');
+
+        const result = await verifyOTP(registeredEmail, otp);
+        if (!result.success) {
+            setError(result.error);
+            setLoading(false);
+            return;
+        }
+        
+        navigateByRole(selectedRole);
+    };
+
+    const handleResendOTP = async () => {
+        setLoading(true);
+        setError('');
+        
+        const result = await resendOTP(registeredEmail);
+        if (!result.success) {
+            setError(result.error);
+        } else {
+            alert('A new verification code has been sent to your email.');
+        }
+        setLoading(false);
+    };
+
     const DEMO_ACCOUNTS = {
         [ROLES.TOURIST]: { name: 'Priya Sharma', email: 'demo.tourist@surakshapath.in', password: 'demo1234', role: ROLES.TOURIST },
         [ROLES.DEPARTMENT]: { name: 'Dr. Rajesh Kumar', email: 'demo.dept@surakshapath.in', password: 'demo1234', role: ROLES.DEPARTMENT, department: 'Meghalaya Tourism Board' },
@@ -105,8 +144,8 @@ export default function AuthPage() {
         setLoading(true);
         setError('');
         await new Promise(r => setTimeout(r, 400));
-        let result = signIn({ email: DEMO_ACCOUNTS[role].email, password: DEMO_ACCOUNTS[role].password });
-        if (!result.success) result = signUp(DEMO_ACCOUNTS[role]);
+        let result = await signIn({ email: DEMO_ACCOUNTS[role].email, password: DEMO_ACCOUNTS[role].password });
+        if (!result.success) result = await signUp(DEMO_ACCOUNTS[role]);
         if (!result.success) { setError(result.error); setLoading(false); return; }
         navigateByRole(role);
     };
@@ -160,14 +199,59 @@ export default function AuthPage() {
                     </div>
 
                     <div className="retro-auth-header">
-                        <h2>{isSignUp ? 'REGISTER' : 'AUTHORIZE'}</h2>
-                        <button type="button" className="btn-ghost btn-sm" onClick={() => { setIsSignUp(!isSignUp); setError(''); }}>
-                            {isSignUp ? 'SWITCH TO SIGN IN →' : 'CREATE NEW ACCOUNT +'}
-                        </button>
+                        <h2>{showOTP ? 'VERIFY EMAIL' : isSignUp ? 'REGISTER' : 'AUTHORIZE'}</h2>
+                        {!showOTP && (
+                            <button type="button" className="btn-ghost btn-sm" onClick={() => { setIsSignUp(!isSignUp); setError(''); }}>
+                                {isSignUp ? 'SWITCH TO SIGN IN →' : 'CREATE NEW ACCOUNT +'}
+                            </button>
+                        )}
                     </div>
 
-                    <form onSubmit={handleSubmit} className="retro-form">
-                        {isSignUp && (
+                    {showOTP ? (
+                        <form onSubmit={handleVerifyOTP} className="retro-form">
+                            <p style={{ color: 'var(--text-muted)', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                                We sent a 6-digit verification code to <strong>{registeredEmail}</strong>. Please enter it below.
+                            </p>
+                            <div className="input-group">
+                                <label>Verification Code</label>
+                                <input
+                                    className="input-field"
+                                    type="text"
+                                    placeholder="e.g. 123456"
+                                    value={otp}
+                                    onChange={e => { setOtp(e.target.value); setError(''); }}
+                                    required
+                                />
+                            </div>
+
+                            {error && (
+                                <div className="retro-error-block">
+                                    <strong>ERROR:</strong> {error}
+                                </div>
+                            )}
+
+                            <button
+                                type="submit"
+                                className="btn retro-submit-btn"
+                                disabled={loading}
+                                style={{ backgroundColor: roleConfig.color, color: 'var(--forest-green)', marginBottom: '1rem' }}
+                            >
+                                {loading ? <PlaneLoader /> : 'VERIFY & GET QR CODE'}
+                            </button>
+
+                            <button
+                                type="button"
+                                className="btn-ghost btn-sm"
+                                onClick={handleResendOTP}
+                                disabled={loading}
+                                style={{ width: '100%', textAlign: 'center', opacity: 0.8 }}
+                            >
+                                Didn't receive the code? Resend Email
+                            </button>
+                        </form>
+                    ) : (
+                        <form onSubmit={handleSubmit} className="retro-form">
+                            {isSignUp && (
                             <div className="input-group">
                                 <label>Full Name</label>
                                 <input
@@ -263,6 +347,7 @@ export default function AuthPage() {
                             {loading ? <PlaneLoader /> : (isSignUp ? 'REGISTER ID' : 'INITIALIZE SESSION')}
                         </button>
                     </form>
+                    )}
 
                     {/* Quick Demo Footer */}
                     <div className="retro-demo-footer">
