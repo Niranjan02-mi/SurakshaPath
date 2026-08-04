@@ -12,5 +12,35 @@ services:
       MONGO_INITDB_ROOT_USERNAME: admin
       MONGO_INITDB_ROOT_PASSWORD: password
 
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: tourist_backend
+    ports:
+      - "5000:5000"
+    depends_on:
+      - mongodb
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      # Overwrite MONGO_URI so that it points to the docker container instead of localhost
+      - MONGO_URI=mongodb://admin:password@mongodb:27017/tourist_auth?authSource=admin
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: tourist_frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    # If the frontend needs env variables, uncomment below
+    # env_file:
+    #   - ./.env
+
 volumes:
   mongodb_data:

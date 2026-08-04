@@ -8,7 +8,7 @@ const char* WIFI_SSID = "YOUR_HOTSPOT_NAME";
 const char* WIFI_PASS = "YOUR_HOTSPOT_PASSWORD";
 
 // Replace with your laptop's Local IP Address where the Node.js server is running
-const char* BACKEND_URL = "http://192.168.x.x:5000/api/tracking/ping";
+const char* BACKEND_URL = "http://10.23.50.230/api/tracking/ping";
 
 // --- ESP-NOW DATA STRUCTURE ---
 // MUST match the structure on the Wearable Node
@@ -65,7 +65,7 @@ void setup() {
   
   // Set device as a Wi-Fi Station
   WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  WiFi.begin(VivoT2, 12345678);
   
   Serial.print("Connecting to WiFi...");
   while (WiFi.status() != WL_CONNECTED) {

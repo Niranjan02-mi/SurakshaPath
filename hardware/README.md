@@ -11,6 +11,10 @@ This board is carried by the tourist. It reads GPS coordinates and broadcasts th
 - 1x Push Button (for SOS)
 - A battery pack (e.g., 18650 shield)
 
+> [!TIP]
+> **Only have one ESP8266 board?**
+> No problem! For your hackathon demo, you can use the code in the `Single_Node_Demo` folder. This script connects the Wearable directly to your phone's Wi-Fi hotspot to send GPS data straight to the backend (bypassing the need for a Gateway board). Wire it exactly as shown below!
+
 ### Wiring:
 | ESP8266 Pin | Component Pin |
 | ----------- | ------------- |
@@ -62,3 +66,17 @@ Before flashing the Wearable, you need to know the Gateway's MAC Address.
 2. Power on the Gateway. Check the Serial Monitor to ensure it connects to your Hotspot.
 3. Power on the Wearable and take it outside so the GPS can get a satellite fix.
 4. Open the `Live Safety Map` on your website. You should see a green dot appear at the GPS location! Press the SOS button on the Wearable, and the dot will turn red!
+
+---
+
+## 3. Single Node Hackathon Demo (Fallback)
+If you only have **one** ESP8266 board, you can't use the offline ESP-NOW protocol (since it requires a sender and a receiver). However, you can still easily demonstrate the hardware tracking!
+
+1. Open `Single_Node_Demo/Single_Node_Demo.ino` in Arduino IDE.
+2. Edit `WIFI_SSID` and `WIFI_PASS` to match your phone's Mobile Hotspot.
+3. Edit `BACKEND_URL` to point to your laptop's Local IP Address.
+4. Edit `MY_TOURIST_ID` with a real ID.
+5. Flash the code to your single ESP8266 board.
+6. Connect the GPS and Button exactly as described in the "Wiring" section above.
+
+*How it works:* Instead of broadcasting offline, this script connects the Wearable directly to your phone's Wi-Fi hotspot to push the GPS data straight to your Node.js backend. It's a perfect workaround for a demo!

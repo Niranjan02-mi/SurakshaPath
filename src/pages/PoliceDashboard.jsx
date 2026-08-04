@@ -131,6 +131,7 @@ export default function PoliceDashboard() {
     const [focusTourist, setFocusTourist] = useState(null);
     const [mapFilter, setMapFilter] = useState('all');
     const [scanStatus, setScanStatus] = useState('idle');
+    const [liveTrackers, setLiveTrackers] = useState([]);
     const [cameraError, setCameraError] = useState('');
     const [activeInfoWindow, setActiveInfoWindow] = useState(null);
     const videoRef = useRef(null);
@@ -149,6 +150,24 @@ export default function PoliceDashboard() {
 
     const markerIcons = useMarkerIcons(isLoaded);
     const tourists = useSimulatedLocations(MOCK_TOURISTS);
+
+    useEffect(() => {
+        const fetchLiveTracking = async () => {
+            try {
+                const res = await fetch('http://localhost:5000/api/tracking/live');
+                if (res.ok) {
+                    const data = await res.json();
+                    setLiveTrackers(data);
+                }
+            } catch (err) {
+                console.error('Error fetching live tracking:', err);
+            }
+        };
+
+        fetchLiveTracking();
+        const interval = setInterval(fetchLiveTracking, 3000); // Poll every 3 seconds
+        return () => clearInterval(interval);
+    }, []);
 
     const fetchBhandardaraPlaces = useCallback((map) => {
         if (!window.google) return;
@@ -603,6 +622,44 @@ export default function PoliceDashboard() {
                                                         fillOpacity: 0.08,
                                                         strokeWeight: 1,
                                                         strokeOpacity: 0.6,
+                                                    }}
+                                                />
+                                            )}
+                                        </React.Fragment>
+                                    ))}
+
+                                    {/* Live Hardware Trackers */}
+                                    {liveTrackers.map(t => (
+                                        <React.Fragment key={t.touristId}>
+                                            <MarkerF
+                                                position={{ lat: t.lat, lng: t.lng }}
+                                                icon={getMarkerIcon(t.sosStatus ? 'sos' : 'active')}
+                                                onClick={() => setActiveInfoWindow(t.touristId)}
+                                            />
+                                            {activeInfoWindow === t.touristId && (
+                                                <InfoWindowF
+                                                    position={{ lat: t.lat, lng: t.lng }}
+                                                    onCloseClick={() => setActiveInfoWindow(null)}
+                                                >
+                                                    <div className="map-popup" style={{ padding: '4px' }}>
+                                                        <strong>Hardware Tracker</strong>
+                                                        <span className={`map-popup-status ${t.sosStatus ? 'sos' : 'active'}`}>{t.sosStatus ? 'SOS' : 'ACTIVE'}</span>
+                                                        <small>🕐 {new Date(t.timestamp).toLocaleTimeString()}</small>
+                                                        <small className="mono">{t.touristId}</small>
+                                                    </div>
+                                                </InfoWindowF>
+                                            )}
+                                            {/* Danger/alert radius */}
+                                            {t.sosStatus && (
+                                                <CircleF
+                                                    center={{ lat: t.lat, lng: t.lng }}
+                                                    radius={5000}
+                                                    options={{
+                                                        strokeColor: '#ff4757',
+                                                        fillColor: '#ff4757',
+                                                        fillOpacity: 0.1,
+                                                        strokeWeight: 2,
+                                                        strokeOpacity: 0.8,
                                                     }}
                                                 />
                                             )}
